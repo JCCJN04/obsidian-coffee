@@ -60,6 +60,7 @@ export default function Home() {
     window.addEventListener('scroll', handleScroll, { passive: true })
 
     function rafLoop() {
+      if (!barFill || !heroInner || !scrollHint || !overlay || !slotA || !slotB) return
       const diff = targetProgress - smoothProgress
       if (Math.abs(diff) < 0.0003) {
         smoothProgress = targetProgress
@@ -70,7 +71,7 @@ export default function Home() {
       const p = smoothProgress
 
       // 1. Video seek
-      if (videoDuration > 0) {
+      if (video && videoDuration > 0) {
         const wantedTime = p * videoDuration
         if (Math.abs(wantedTime - video.currentTime) > SEEK_THRESHOLD) {
           const v = video as HTMLVideoElement & { fastSeek?: (t: number) => void }
