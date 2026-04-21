@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+const FRAME_COUNT = 121
+const IMAGE_SCALE = 0.88
+
 const STAGES = [
   { at: 0,    text: '' },
   { at: 0.05, text: 'Los granos toman forma…' },
@@ -12,7 +15,7 @@ const STAGES = [
 
 export default function Home() {
   const navRef         = useRef<HTMLElement>(null)
-  const videoRef       = useRef<HTMLVideoElement>(null)
+  const canvasRef      = useRef<HTMLCanvasElement>(null)
   const heroDriverRef  = useRef<HTMLDivElement>(null)
   const heroInnerRef   = useRef<HTMLDivElement>(null)
   const heroSceneRef   = useRef<HTMLDivElement>(null)
@@ -27,7 +30,7 @@ export default function Home() {
 
   useEffect(() => {
     const nav         = navRef.current
-    const video       = videoRef.current
+    const canvas      = canvasRef.current
     const heroDriver  = heroDriverRef.current
     const heroInner   = heroInnerRef.current
     const heroScene   = heroSceneRef.current
@@ -38,18 +41,61 @@ export default function Home() {
     const scrollHint  = scrollHintRef.current
     const overlay     = overlayRef.current
 
-    if (!nav || !video || !heroDriver || !heroInner || !heroScene ||
+    if (!nav || !canvas || !heroDriver || !heroInner || !heroScene ||
         !heroSection || !barFill || !slotA || !slotB || !scrollHint || !overlay) return
+
+    const cvs = canvas  // non-null alias for closures
+    const ctx = cvs.getContext('2d')!
+    const frames: HTMLImageElement[] = new Array(FRAME_COUNT).fill(null)
+    let currentFrame    = -1
+    let firstFrameReady = false
+
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1
+      cvs.width  = window.innerWidth  * dpr
+      cvs.height = window.innerHeight * dpr
+      if (currentFrame >= 0) drawFrame(currentFrame)
+    }
+
+    function drawFrame(index: number) {
+      const img = frames[index]
+      if (!img || !img.complete || img.naturalWidth === 0) return
+      const cw = cvs.width, ch = cvs.height
+      const iw = img.naturalWidth, ih = img.naturalHeight
+      const scale = Math.max(cw / iw, ch / ih) * IMAGE_SCALE
+      const dw = iw * scale, dh = ih * scale
+      ctx.fillStyle = '#0c0704'
+      ctx.fillRect(0, 0, cw, ch)
+      ctx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
+    }
+
+    function loadFrames() {
+      const first = new Image()
+      first.onload = () => {
+        frames[0] = first
+        firstFrameReady = true
+        currentFrame = 0
+        drawFrame(0)
+        for (let i = 2; i <= FRAME_COUNT; i++) {
+          const img = new Image()
+          img.src = `/frames/frame_${String(i).padStart(4, '0')}.webp`
+          img.onload = () => { frames[i - 1] = img }
+        }
+      }
+      first.src = '/frames/frame_0001.webp'
+    }
+
+    window.addEventListener('resize', resizeCanvas, { passive: true })
+    resizeCanvas()
+    loadFrames()
 
     let targetProgress = 0
     let smoothProgress = 0
-    const LERP           = 0.075
-    const SEEK_THRESHOLD = 0.016
-    let videoDuration    = 0
+    const LERP         = 0.075
     let rafId: number
-    let activeSlot       = 'A'
-    let lastText         = ''
-    let lastOverlayXP    = -1
+    let activeSlot     = 'A'
+    let lastText       = ''
+    let lastOverlayXP  = -1
 
     const handleScroll = () => {
       const driverH  = heroDriver.offsetHeight - window.innerHeight
@@ -70,13 +116,19 @@ export default function Home() {
 
       const p = smoothProgress
 
-      // 1. Video seek
-      if (video && videoDuration > 0) {
-        const wantedTime = p * videoDuration
-        if (Math.abs(wantedTime - video.currentTime) > SEEK_THRESHOLD) {
-          const v = video as HTMLVideoElement & { fastSeek?: (t: number) => void }
-          if (v.fastSeek) v.fastSeek(wantedTime)
-          else video.currentTime = wantedTime
+      // 1. Canvas frame — works identically forward and backward
+      if (firstFrameReady) {
+        const idx = Math.min(Math.floor(p * FRAME_COUNT), FRAME_COUNT - 1)
+        if (idx !== currentFrame) {
+          let best = idx
+          if (!frames[idx]) {
+            for (let d = 1; d < FRAME_COUNT; d++) {
+              if (frames[idx - d]) { best = idx - d; break }
+              if (frames[idx + d]) { best = idx + d; break }
+            }
+          }
+          currentFrame = idx
+          drawFrame(best)
         }
       }
 
@@ -123,12 +175,6 @@ export default function Home() {
       rafId = requestAnimationFrame(rafLoop)
     }
 
-    video.addEventListener('loadedmetadata', () => {
-      videoDuration = video.duration
-      video.currentTime = 0
-      video.pause()
-    })
-    video.load()
     rafId = requestAnimationFrame(rafLoop)
 
     // Hero 3D tilt
@@ -176,6 +222,7 @@ export default function Home() {
 
     return () => {
       window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', resizeCanvas)
       heroSection.removeEventListener('mousemove', handleMouseMove)
       heroSection.removeEventListener('mouseleave', handleMouseLeave)
       cancelAnimationFrame(rafId)
@@ -191,17 +238,9 @@ export default function Home() {
 
   return (
     <>
-      {/* VIDEO LAYER */}
+      {/* CANVAS FRAME LAYER */}
       <div className="video-wrap" aria-hidden="true">
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          preload="auto"
-          poster="/first_frame.jpeg"
-        >
-          <source src="/cafe_beans_explosion.mp4" type="video/mp4" />
-        </video>
+        <canvas ref={canvasRef} id="bgCanvas" />
         <div className="video-overlay" ref={overlayRef} />
       </div>
 

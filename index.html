@@ -34,30 +34,22 @@
       position: relative;
     }
 
-    /* ───────────────────────── VIDEO LAYER ───────────────────────── */
+    /* ───────────────────────── CANVAS LAYER ───────────────────────── */
     .video-wrap {
       position: fixed;
       inset: 0;
       z-index: 0;
       overflow: hidden;
-      /* Propio layer GPU para que el video componga sin tocar el CPU */
-      transform: translateZ(0);
-      -webkit-transform: translateZ(0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
+      background: var(--deep);
     }
 
-    .video-wrap video {
+    #bgCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
-      object-position: center;
-      /* Sin filtros CSS — degradan la calidad y rompen GPU compositing.
-         El oscurecimiento lo hace el overlay puro. */
-      transform: translateZ(0);
-      -webkit-transform: translateZ(0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
+      display: block;
     }
 
     .video-overlay {
@@ -796,17 +788,9 @@
 </head>
 <body>
 
-  <!-- ░░░ VIDEO LAYER ░░░ -->
+  <!-- ░░░ CANVAS FRAME LAYER ░░░ -->
   <div class="video-wrap" aria-hidden="true">
-    <video
-      id="bgVideo"
-      muted
-      playsinline
-      preload="auto"
-      poster="first_frame.jpeg"
-    >
-      <source src="cafe_beans_explosion.mp4" type="video/mp4" />
-    </video>
+    <canvas id="bgCanvas"></canvas>
     <div class="video-overlay"></div>
   </div>
 
@@ -1084,7 +1068,6 @@
   <script>
     // ── Elementos ─────────────────────────────────────────────────
     const nav         = document.getElementById('main-nav');
-    const video       = document.getElementById('bgVideo');
     const heroDriver  = document.querySelector('.hero-driver');
     const heroInner   = document.querySelector('.hero-inner');
     const heroScene   = document.getElementById('heroScene');
@@ -1094,20 +1077,66 @@
     const slotB       = document.getElementById('slotB');
     const scrollHint  = document.getElementById('scrollHint');
     const overlay     = document.querySelector('.video-overlay');
+    const canvas      = document.getElementById('bgCanvas');
+    const ctx         = canvas.getContext('2d');
 
-    // ── Estado ────────────────────────────────────────────────────
+    // ── Canvas setup ──────────────────────────────────────────────
+    const IMAGE_SCALE = 0.88;
+    const FRAME_COUNT = 121;
+    const frames      = new Array(FRAME_COUNT).fill(null);
+    let currentFrame  = -1;
+    let firstFrameReady = false;
+
+    function resizeCanvas() {
+      canvas.width  = window.innerWidth  * (window.devicePixelRatio || 1);
+      canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
+      // Redibuja el frame actual tras el resize
+      if (currentFrame >= 0) drawFrame(currentFrame);
+    }
+    window.addEventListener('resize', resizeCanvas, { passive: true });
+    resizeCanvas();
+
+    function drawFrame(index) {
+      const img = frames[index];
+      if (!img || !img.complete || img.naturalWidth === 0) return;
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      const scale = Math.max(cw / iw, ch / ih) * IMAGE_SCALE;
+      const dw = iw * scale;
+      const dh = ih * scale;
+      const dx = (cw - dw) / 2;
+      const dy = (ch - dh) / 2;
+      ctx.fillStyle = '#0c0704';
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(img, dx, dy, dw, dh);
+    }
+
+    // Carga los frames: primero el 1, luego el resto en background
+    function loadFrames() {
+      const first = new Image();
+      first.onload = () => {
+        frames[0] = first;
+        firstFrameReady = true;
+        currentFrame = 0;
+        drawFrame(0);
+        // Carga el resto
+        for (let i = 2; i <= FRAME_COUNT; i++) {
+          const img = new Image();
+          const num = String(i).padStart(4, '0');
+          img.src = `frames/frame_${num}.webp`;
+          img.onload = () => { frames[i - 1] = img; };
+        }
+      };
+      first.src = 'frames/frame_0001.webp';
+    }
+    loadFrames();
+
+    // ── Estado scroll ─────────────────────────────────────────────
     let targetProgress = 0;
     let smoothProgress = 0;
-
-    // LERP: cuánto se acerca cada frame (0.07 = fluido, 0.13 = más responsivo)
     const LERP = 0.075;
-
-    // Mínima diferencia de tiempo para hacer seek (evita seeks innecesarios)
-    // Un video a 30fps tiene frames cada ~0.033s; usamos la mitad como threshold.
-    const SEEK_THRESHOLD = 0.016;
-
-    // Duración cacheada para no leerla del DOM cada frame
-    let videoDuration = 0;
 
     // Etapas narrativas
     const stages = [
@@ -1117,13 +1146,11 @@
       { at: 0.65, text: 'La explosión.' },
       { at: 0.85, text: 'El aroma lo inunda todo.' },
     ];
-    let activeSlot = 'A';
-    let lastText   = '';
-
-    // ── Caché del overlay para evitar rebuilds innecesarios ───────
+    let activeSlot   = 'A';
+    let lastText     = '';
     let lastOverlayXP = -1;
 
-    // ── Scroll: solo escribe el target, nada más ──────────────────
+    // ── Scroll ────────────────────────────────────────────────────
     window.addEventListener('scroll', () => {
       const driverH  = heroDriver.offsetHeight - window.innerHeight;
       targetProgress = Math.min(Math.max(window.scrollY / driverH, 0), 1);
@@ -1133,8 +1160,6 @@
     // ── rAF loop ──────────────────────────────────────────────────
     function rafLoop() {
       const diff = targetProgress - smoothProgress;
-
-      // Snap cuando ya está muy cerca: elimina el "eternamente moviéndose"
       if (Math.abs(diff) < 0.0003) {
         smoothProgress = targetProgress;
       } else {
@@ -1143,16 +1168,20 @@
 
       const p = smoothProgress;
 
-      // 1. Video seek — solo si el delta vale al menos medio frame
-      if (videoDuration > 0) {
-        const wantedTime = p * videoDuration;
-        if (Math.abs(wantedTime - video.currentTime) > SEEK_THRESHOLD) {
-          // fastSeek() es más rápido en navegadores que lo soportan
-          if (video.fastSeek) {
-            video.fastSeek(wantedTime);
-          } else {
-            video.currentTime = wantedTime;
+      // 1. Canvas frame — funciona igual hacia adelante y hacia atrás
+      if (firstFrameReady) {
+        const idx = Math.min(Math.floor(p * FRAME_COUNT), FRAME_COUNT - 1);
+        if (idx !== currentFrame) {
+          // Si el frame pedido no cargó aún, busca el más cercano disponible
+          let best = idx;
+          if (!frames[idx]) {
+            for (let d = 1; d < FRAME_COUNT; d++) {
+              if (frames[idx - d]) { best = idx - d; break; }
+              if (frames[idx + d]) { best = idx + d; break; }
+            }
           }
+          currentFrame = idx;
+          drawFrame(best);
         }
       }
 
@@ -1161,15 +1190,15 @@
 
       // 3. Hero text fade (primer 28% del scroll)
       const textFade = p < 0.28 ? p / 0.28 : 1;
-      if (textFade < 1 || heroInner.style.opacity !== '0') {
+      if (heroInner) {
         heroInner.style.opacity   = (1 - textFade).toFixed(3);
         heroInner.style.transform = `translateY(${(textFade * -70).toFixed(1)}px)`;
       }
 
       // 4. Scroll hint
-      scrollHint.style.opacity = p < 0.03 ? '1' : '0';
+      if (scrollHint) scrollHint.style.opacity = p < 0.03 ? '1' : '0';
 
-      // 5. Overlay dinámico — solo recalcula cuando xp cambió en >0.5%
+      // 5. Overlay dinámico
       const xp = p > 0.48 ? (p - 0.48) / 0.52 : 0;
       if (Math.abs(xp - lastOverlayXP) > 0.005) {
         lastOverlayXP = xp;
@@ -1190,7 +1219,6 @@
         const incoming = activeSlot === 'A' ? slotA : slotB;
         const outgoing  = activeSlot === 'A' ? slotB : slotA;
         incoming.textContent = newText;
-        // Doble rAF para garantizar que el texto ya esté en el DOM antes del fade
         requestAnimationFrame(() => requestAnimationFrame(() => {
           outgoing.classList.remove('visible');
           if (newText) incoming.classList.add('visible');
@@ -1201,28 +1229,21 @@
 
       requestAnimationFrame(rafLoop);
     }
-
-    // ── Arranca cuando el video tiene metadata ────────────────────
-    video.addEventListener('loadedmetadata', () => {
-      videoDuration = video.duration;
-      // Congela el video en el primer frame para que el poster no parpadee
-      video.currentTime = 0;
-      video.pause();
-    });
-    video.load();
     requestAnimationFrame(rafLoop);
 
     // ── Hero 3D tilt (solo al inicio) ─────────────────────────────
-    heroSection.addEventListener('mousemove', e => {
-      if (targetProgress > 0.08) return;
-      const r = heroSection.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width  - 0.5;
-      const y = (e.clientY - r.top)  / r.height - 0.5;
-      heroScene.style.transform = `rotateY(${x * 10}deg) rotateX(${-y * 6}deg)`;
-    });
-    heroSection.addEventListener('mouseleave', () => {
-      heroScene.style.transform = 'rotateY(0deg) rotateX(0deg)';
-    });
+    if (heroSection) {
+      heroSection.addEventListener('mousemove', e => {
+        if (targetProgress > 0.08) return;
+        const r = heroSection.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width  - 0.5;
+        const y = (e.clientY - r.top)  / r.height - 0.5;
+        heroScene.style.transform = `rotateY(${x * 10}deg) rotateX(${-y * 6}deg)`;
+      });
+      heroSection.addEventListener('mouseleave', () => {
+        heroScene.style.transform = 'rotateY(0deg) rotateX(0deg)';
+      });
+    }
 
     // ── Reveal sections ───────────────────────────────────────────
     const revealObs = new IntersectionObserver(entries => {
