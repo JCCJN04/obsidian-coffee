@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OBSIDIAN COFFEE — Café de Especialidad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    /* ───────────────────────── RESET & BASE ───────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:   #06030100;
+      --deep:    #0c0704;
+      --brown:   #2a0f05;
+      --amber:   #c8781a;
+      --gold:    #e8a84a;
+      --cream:   #f0dfc4;
+      --white:   #faf6f0;
+      --glass:   rgba(255,255,255,0.06);
+      --glass-border: rgba(255,255,255,0.12);
+    }
+
+    /* scroll-behavior: smooth eliminado — interfiere con el scroll-driven video */
+
+    body {
+      background: var(--deep);
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ───────────────────────── VIDEO LAYER ───────────────────────── */
+    .video-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      /* Propio layer GPU para que el video componga sin tocar el CPU */
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    .video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      /* Sin filtros CSS — degradan la calidad y rompen GPU compositing.
+         El oscurecimiento lo hace el overlay puro. */
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    .video-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(6, 3, 1, 0.50) 0%,
+        rgba(6, 3, 1, 0.12) 40%,
+        rgba(6, 3, 1, 0.22) 60%,
+        rgba(6, 3, 1, 0.82) 100%
+      );
+      /* Sin transition CSS — el rAF loop lo actualiza cada frame directamente */
+    }
+
+    /* ───────────────────────── CONTENT LAYER ───────────────────────── */
+    .content-layer {
+      position: relative;
+      z-index: 10;
+    }
+
+    /* ───────────────────────── NAV ───────────────────────── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.5rem 4rem;
+      transition: background 0.4s ease, backdrop-filter 0.4s ease,
+                  padding 0.4s ease, border-bottom 0.4s ease;
+    }
+
+    nav.scrolled {
+      background: rgba(6, 3, 1, 0.75);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border-bottom: 1px solid rgba(200, 120, 26, 0.2);
+      padding: 1rem 4rem;
+    }
+
+    .nav-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.6rem;
+      letter-spacing: 0.15em;
+      color: var(--cream);
+      text-decoration: none;
+    }
+
+    .nav-logo span {
+      color: var(--amber);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: rgba(240, 223, 196, 0.75);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover { color: var(--gold); }
+
+    .nav-cta {
+      background: transparent;
+      border: 1px solid var(--amber);
+      color: var(--amber);
+      padding: 0.55rem 1.4rem;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: background 0.3s, color 0.3s;
+      text-decoration: none;
+    }
+
+    .nav-cta:hover {
+      background: var(--amber);
+      color: var(--deep);
+    }
+
+    /* ───────────────────────── HERO ───────────────────────── */
+    .hero-driver {
+      height: 500vh;   /* cuánto scrolleas para ver todo el video */
+      position: relative;
+      z-index: 10;
+    }
+
+    .hero {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8rem 2rem 4rem;
+      perspective: 1200px;
+      overflow: hidden;
+    }
+
+    .hero-inner {
+      will-change: opacity, transform;
+    }
+
+    /* Barra de progreso lateral */
+    .scroll-bar {
+      position: absolute;
+      right: 2.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 2px;
+      height: 120px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .scroll-bar-fill {
+      width: 100%;
+      height: 0%;
+      background: var(--amber);
+      transition: height 0.05s linear;
+      box-shadow: 0 0 8px var(--amber);
+    }
+
+    /* Frases cinemáticas — dos slots para crossfade real */
+    .stage-slot {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6vw;
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-weight: 300;
+      font-size: clamp(3.6rem, 9.5vw, 10rem);
+      line-height: 1.05;
+      text-align: center;
+      color: var(--cream);
+      text-shadow:
+        0 0 80px  rgba(200, 120, 26, 0.55),
+        0 0 160px rgba(200, 120, 26, 0.25),
+        0 6px 40px rgba(0,0,0,0.9);
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.96);
+      transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.23,1,0.32,1);
+      z-index: 6;
+    }
+
+    .stage-slot.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .hero-scene {
+      transform-style: preserve-3d;
+      transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+      will-change: transform;
+    }
+
+    .hero-eyebrow {
+      font-size: 0.75rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 1.5rem;
+      font-weight: 400;
+      opacity: 0.9;
+    }
+
+    .hero-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(4rem, 11vw, 10rem);
+      font-weight: 700;
+      line-height: 0.9;
+      color: var(--white);
+      text-shadow: 0 4px 40px rgba(0,0,0,0.6), 0 0 80px rgba(0,0,0,0.4);
+      margin-bottom: 0.2em;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: var(--cream);
+    }
+
+    .hero-title .accent {
+      color: var(--gold);
+      display: block;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(0.95rem, 1.8vw, 1.15rem);
+      color: rgba(240, 223, 196, 0.7);
+      max-width: 460px;
+      margin: 1.8rem auto 2.8rem;
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: var(--amber);
+      color: var(--deep);
+      padding: 1rem 2.4rem;
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.3s, transform 0.3s;
+      display: inline-block;
+    }
+
+    .btn-primary:hover {
+      background: var(--gold);
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--cream);
+      padding: 1rem 2.4rem;
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 400;
+      text-decoration: none;
+      border: 1px solid rgba(240, 223, 196, 0.3);
+      transition: border-color 0.3s, color 0.3s;
+      display: inline-block;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--cream);
+      color: var(--white);
+    }
+
+    .hero-scroll-hint {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0.5;
+      animation: bounce 2s infinite;
+    }
+
+    .hero-scroll-hint span {
+      font-size: 0.65rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+    }
+
+    .scroll-line {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, var(--amber), transparent);
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(8px); }
+    }
+
+    /* ───────────────────────── SECTION SHARED ───────────────────────── */
+    section {
+      position: relative;
+      z-index: 10;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 1rem;
+      font-weight: 400;
+    }
+
+    .section-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.4rem, 5vw, 4.5rem);
+      font-weight: 600;
+      line-height: 1.05;
+      color: var(--white);
+      margin-bottom: 1rem;
+    }
+
+    .section-title em {
+      font-style: italic;
+      color: var(--cream);
+    }
+
+    /* ───────────────────────── FEATURES ───────────────────────── */
+    .features {
+      padding: 10rem 4rem;
+      background: linear-gradient(to bottom, transparent, rgba(6,3,1,0.5) 30%, rgba(6,3,1,0.5) 70%, transparent);
+    }
+
+    .features-header {
+      text-align: center;
+      max-width: 560px;
+      margin: 0 auto 5rem;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .glass-card {
+      background: var(--glass);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid var(--glass-border);
+      padding: 2.5rem;
+      transition: transform 0.4s cubic-bezier(0.23,1,0.32,1),
+                  background 0.4s, border-color 0.4s;
+    }
+
+    .glass-card:hover {
+      background: rgba(255,255,255,0.09);
+      border-color: rgba(200, 120, 26, 0.35);
+      transform: translateY(-6px);
+    }
+
+    .card-icon {
+      font-size: 2rem;
+      margin-bottom: 1.2rem;
+      display: block;
+    }
+
+    .card-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--cream);
+      margin-bottom: 0.8rem;
+    }
+
+    .card-text {
+      font-size: 0.9rem;
+      color: rgba(240, 223, 196, 0.6);
+      line-height: 1.75;
+    }
+
+    .card-divider {
+      width: 32px;
+      height: 1px;
+      background: var(--amber);
+      margin-bottom: 1.2rem;
+    }
+
+    /* ───────────────────────── STATS ───────────────────────── */
+    .stats {
+      padding: 7rem 4rem;
+    }
+
+    .stats-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: center;
+    }
+
+    .stats-copy p {
+      font-size: 1rem;
+      color: rgba(240, 223, 196, 0.65);
+      line-height: 1.85;
+      margin-top: 1.5rem;
+      max-width: 430px;
+    }
+
+    .stats-numbers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    .stat-item {
+      padding: 2rem;
+      border-left: 1px solid rgba(200, 120, 26, 0.3);
+    }
+
+    .stat-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: var(--gold);
+      line-height: 1;
+      display: flex;
+      align-items: baseline;
+      gap: 0.1em;
+    }
+
+    .stat-num sup {
+      font-size: 1.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.78rem;
+      color: rgba(240, 223, 196, 0.55);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 0.5rem;
+    }
+
+    /* ───────────────────────── ORIGINS ───────────────────────── */
+    .origins {
+      padding: 8rem 4rem;
+      background: rgba(6,3,1,0.6);
+      backdrop-filter: blur(8px);
+    }
+
+    .origins-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .origins-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 4rem;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .origins-header p {
+      max-width: 360px;
+      color: rgba(240, 223, 196, 0.6);
+      line-height: 1.8;
+      font-size: 0.95rem;
+    }
+
+    .origins-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: rgba(200, 120, 26, 0.15);
+    }
+
+    .origin-item {
+      background: rgba(6,3,1,0.7);
+      padding: 3rem 2rem;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.3s;
+    }
+
+    .origin-item:hover {
+      background: rgba(200, 120, 26, 0.08);
+    }
+
+    .origin-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 3px;
+      height: 0;
+      background: var(--amber);
+      transition: height 0.4s ease;
+    }
+
+    .origin-item:hover::before { height: 100%; }
+
+    .origin-country {
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 0.8rem;
+    }
+
+    .origin-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--white);
+      margin-bottom: 1rem;
+    }
+
+    .origin-desc {
+      font-size: 0.88rem;
+      color: rgba(240, 223, 196, 0.55);
+      line-height: 1.7;
+    }
+
+    .origin-tag {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.3rem 0.8rem;
+      border: 1px solid rgba(200, 120, 26, 0.35);
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--amber);
+      text-transform: uppercase;
+    }
+
+    /* ───────────────────────── QUOTE ───────────────────────── */
+    .quote-section {
+      padding: 10rem 2rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .quote-section::before {
+      content: '"';
+      position: absolute;
+      top: 3rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 18rem;
+      color: rgba(200, 120, 26, 0.08);
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .quote-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2rem, 4.5vw, 4rem);
+      font-style: italic;
+      font-weight: 300;
+      color: var(--cream);
+      max-width: 900px;
+      margin: 0 auto;
+      line-height: 1.3;
+      position: relative;
+      z-index: 1;
+    }
+
+    .quote-author {
+      margin-top: 2.5rem;
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--amber);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ───────────────────────── CTA SECTION ───────────────────────── */
+    .cta-section {
+      padding: 8rem 4rem;
+      background: rgba(6,3,1,0.75);
+      backdrop-filter: blur(12px);
+    }
+
+    .cta-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      gap: 5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .cta-copy { flex: 1; min-width: 280px; }
+
+    .cta-copy p {
+      color: rgba(240, 223, 196, 0.6);
+      line-height: 1.8;
+      margin-top: 1.2rem;
+      font-size: 0.95rem;
+    }
+
+    .cta-form { flex: 1; min-width: 280px; }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-bottom: 1px solid rgba(200, 120, 26, 0.4);
+      color: var(--white);
+      padding: 0.9rem 1rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.3s, background 0.3s;
+    }
+
+    .form-group input:focus {
+      border-color: var(--amber);
+      background: rgba(200, 120, 26, 0.05);
+    }
+
+    .form-group input::placeholder {
+      color: rgba(240, 223, 196, 0.35);
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ───────────────────────── FOOTER ───────────────────────── */
+    footer {
+      position: relative;
+      z-index: 10;
+      background: rgba(3, 1, 0, 0.9);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(200, 120, 26, 0.15);
+      padding: 4rem 4rem 2.5rem;
+    }
+
+    .footer-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 3rem;
+      margin-bottom: 3rem;
+    }
+
+    .footer-brand p {
+      font-size: 0.88rem;
+      color: rgba(240, 223, 196, 0.45);
+      line-height: 1.8;
+      margin-top: 1rem;
+      max-width: 260px;
+    }
+
+    .footer-col h4 {
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 1.2rem;
+    }
+
+    .footer-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .footer-col ul a {
+      text-decoration: none;
+      font-size: 0.87rem;
+      color: rgba(240, 223, 196, 0.45);
+      transition: color 0.3s;
+    }
+
+    .footer-col ul a:hover { color: var(--cream); }
+
+    .footer-bottom {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: rgba(240, 223, 196, 0.3);
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    /* ───────────────────────── REVEAL ANIMATION ───────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(40px) scale(0.98);
+      transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.23,1,0.32,1);
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ───────────────────────── REDUCED MOTION ───────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      video { display: none; }
+      .video-wrap { background: var(--deep); }
+      .reveal { opacity: 1; transform: none; transition: none; }
+    }
+
+    /* ───────────────────────── RESPONSIVE ───────────────────────── */
+    @media (max-width: 900px) {
+      nav { padding: 1.2rem 2rem; }
+      nav.scrolled { padding: 0.8rem 2rem; }
+      .nav-links { display: none; }
+      .features, .stats, .origins, .cta-section { padding-left: 2rem; padding-right: 2rem; }
+      .stats-inner { grid-template-columns: 1fr; gap: 3rem; }
+      .origins-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .hero { padding: 7rem 1.5rem 4rem; }
+      .footer-grid { grid-template-columns: 1fr; }
+      footer { padding: 3rem 1.5rem 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ░░░ VIDEO LAYER ░░░ -->
+  <div class="video-wrap" aria-hidden="true">
+    <video
+      id="bgVideo"
+      muted
+      playsinline
+      preload="auto"
+      poster="first_frame.jpeg"
+    >
+      <source src="cafe_beans_explosion.mp4" type="video/mp4" />
+    </video>
+    <div class="video-overlay"></div>
+  </div>
+
+  <!-- ░░░ NAVIGATION ░░░ -->
+  <nav id="main-nav">
+    <a href="#" class="nav-logo">OBSIDIAN<span>.</span></a>
+    <ul class="nav-links">
+      <li><a href="#origenes">Orígenes</a></li>
+      <li><a href="#metodo">Método</a></li>
+      <li><a href="#tienda">Tienda</a></li>
+      <li><a href="#nosotros">Nosotros</a></li>
+    </ul>
+    <a href="#contacto" class="nav-cta">Ordenar</a>
+  </nav>
+
+  <!-- ░░░ CONTENT LAYER ░░░ -->
+  <div class="content-layer">
+
+    <!-- HERO -->
+    <div class="hero-driver">
+      <section class="hero" id="hero">
+        <div class="hero-inner">
+          <div class="hero-scene" id="heroScene">
+            <p class="hero-eyebrow">Café de Especialidad — Desde 2018</p>
+            <h1 class="hero-title">
+              El sabor<br/>
+              <em>que</em>
+              <span class="accent">despierta.</span>
+            </h1>
+            <p class="hero-subtitle">
+              Granos seleccionados a mano de las altitudes más extremas del mundo,
+              tostados con precisión milimétrica para revelar lo imposible.
+            </p>
+            <div class="hero-actions">
+              <a href="#tienda" class="btn-primary">Explorar la colección</a>
+              <a href="#origenes" class="btn-secondary">Nuestros orígenes</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barra de progreso del scroll -->
+        <div class="scroll-bar" aria-hidden="true">
+          <div class="scroll-bar-fill" id="scrollBarFill"></div>
+        </div>
+
+        <!-- Frases cinemáticas (crossfade de dos slots) -->
+        <p class="stage-slot" id="slotA"></p>
+        <p class="stage-slot" id="slotB"></p>
+
+        <div class="hero-scroll-hint" aria-hidden="true" id="scrollHint">
+          <div class="scroll-line"></div>
+          <span>Scroll</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- FEATURES -->
+    <section class="features" id="metodo">
+      <div class="features-header reveal">
+        <p class="section-label">Nuestra filosofía</p>
+        <h2 class="section-title">El método <em>Obsidian</em></h2>
+      </div>
+
+      <div class="features-grid">
+        <div class="glass-card reveal reveal-delay-1">
+          <span class="card-icon">◈</span>
+          <div class="card-divider"></div>
+          <h3 class="card-title">Selección por altitud</h3>
+          <p class="card-text">
+            Solo trabajamos con granos cultivados por encima de los 1,700 msnm.
+            La altitud extrema concentra los azúcares naturales y amplifica la complejidad aromática.
+          </p>
+        </div>
+
+        <div class="glass-card reveal reveal-delay-2">
+          <span class="card-icon">◈</span>
+          <div class="card-divider"></div>
+          <h3 class="card-title">Tostión artesanal</h3>
+          <p class="card-text">
+            Cada lote es tostado en pequeñas cantidades con curvas de temperatura
+            personalizadas. Sin automatización. Sin compromiso.
+          </p>
+        </div>
+
+        <div class="glass-card reveal reveal-delay-3">
+          <span class="card-icon">◈</span>
+          <div class="card-divider"></div>
+          <h3 class="card-title">Frescura garantizada</h3>
+          <p class="card-text">
+            Despachamos dentro de las 48 horas post-tostión.
+            Tu café llega en su punto exacto: el momento donde el aroma alcanza su plenitud.
+          </p>
+        </div>
+
+        <div class="glass-card reveal reveal-delay-4">
+          <span class="card-icon">◈</span>
+          <div class="card-divider"></div>
+          <h3 class="card-title">Comercio directo</h3>
+          <p class="card-text">
+            Relación directa con cada productor. Precios justos, trazabilidad total
+            y un vínculo que trasciende lo transaccional.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="stats">
+      <div class="stats-inner">
+        <div class="stats-copy reveal">
+          <p class="section-label">En números</p>
+          <h2 class="section-title">Una <em>obsesión</em><br/>medida</h2>
+          <p>
+            Cada cifra es el resultado de años de trabajo silencioso, de madrugadas
+            en fincas remotas y de una convicción irreductible: el café extraordinario
+            no se descubre — se construye.
+          </p>
+        </div>
+
+        <div class="stats-numbers">
+          <div class="stat-item reveal reveal-delay-1">
+            <div class="stat-num" data-target="12">0<sup>+</sup></div>
+            <p class="stat-label">Países de origen</p>
+          </div>
+          <div class="stat-item reveal reveal-delay-2">
+            <div class="stat-num" data-target="340">0<sup>t</sup></div>
+            <p class="stat-label">Horas de cata anuales</p>
+          </div>
+          <div class="stat-item reveal reveal-delay-3">
+            <div class="stat-num" data-target="97">0<sup>%</sup></div>
+            <p class="stat-label">Clientes que repiten</p>
+          </div>
+          <div class="stat-item reveal reveal-delay-4">
+            <div class="stat-num" data-target="6">0<sup>k+</sup></div>
+            <p class="stat-label">Kg tostados por mes</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ORIGINS -->
+    <section class="origins" id="origenes">
+      <div class="origins-inner">
+        <div class="origins-header">
+          <div class="reveal">
+            <p class="section-label">Orígenes selectos</p>
+            <h2 class="section-title">El terroir <em>del café</em></h2>
+          </div>
+          <p class="reveal reveal-delay-1">
+            Exploramos los rincones más remotos del cinturón ecuatorial
+            para traer expresiones únicas directamente a tu taza.
+          </p>
+        </div>
+
+        <div class="origins-grid">
+          <div class="origin-item reveal">
+            <p class="origin-country">Ethiopia — Yirgacheffe</p>
+            <h3 class="origin-name">Kochere Natural</h3>
+            <p class="origin-desc">
+              Notas de jazmín, bergamota y frutos rojos fermentados. Una experiencia
+              floral que redefine lo que el café puede ser.
+            </p>
+            <span class="origin-tag">Proceso Natural</span>
+          </div>
+
+          <div class="origin-item reveal reveal-delay-1">
+            <p class="origin-country">Colombia — Huila</p>
+            <h3 class="origin-name">El Paraíso Doble Anaeróbico</h3>
+            <p class="origin-desc">
+              Melocotón, maracuyá y panela. Una fermentación controlada durante 72 horas
+              que genera una complejidad estratosférica.
+            </p>
+            <span class="origin-tag">Anaeróbico</span>
+          </div>
+
+          <div class="origin-item reveal reveal-delay-2">
+            <p class="origin-country">Guatemala — Huehuetenango</p>
+            <h3 class="origin-name">Cuilco Washed</h3>
+            <p class="origin-desc">
+              Caramelo oscuro, nuez moscada y chocolate amargo. La expresión más
+              pura del altiplano guatemalteco en cada sorbo.
+            </p>
+            <span class="origin-tag">Lavado</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUOTE -->
+    <section class="quote-section">
+      <blockquote class="quote-text reveal">
+        El café extraordinario no es un lujo. Es la única forma honesta de empezar el día.
+      </blockquote>
+      <p class="quote-author reveal reveal-delay-1">— Fundadores, Obsidian Coffee</p>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section" id="contacto">
+      <div class="cta-inner">
+        <div class="cta-copy reveal">
+          <p class="section-label">Únete a la lista</p>
+          <h2 class="section-title">Sé el primero<br/><em>en saberlo</em></h2>
+          <p>
+            Nuevos orígenes, lotes limitados y lanzamientos exclusivos.
+            Sin spam. Solo café extraordinario cuando aparece.
+          </p>
+        </div>
+
+        <div class="cta-form reveal reveal-delay-2">
+          <form onsubmit="handleSubmit(event)">
+            <div class="form-group">
+              <input type="text" placeholder="Tu nombre" required />
+            </div>
+            <div class="form-group">
+              <input type="email" placeholder="Tu correo electrónico" required />
+            </div>
+            <button type="submit" class="btn-primary" style="width:100%; border:none; cursor:pointer;">
+              Suscribirme
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="#" class="nav-logo">OBSIDIAN<span style="color:var(--amber)">.</span></a>
+          <p>
+            Café de especialidad tostado en pequeños lotes. Porque el café que bebes
+            cada mañana merece la misma atención que el vino que guardas para ocasiones especiales.
+          </p>
+        </div>
+
+        <div class="footer-col">
+          <h4>Tienda</h4>
+          <ul>
+            <li><a href="#">Suscripciones</a></li>
+            <li><a href="#">Lotes únicos</a></li>
+            <li><a href="#">Equipo de barismo</a></li>
+            <li><a href="#">Gift cards</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Empresa</h4>
+          <ul>
+            <li><a href="#">Nuestra historia</a></li>
+            <li><a href="#">Productores</a></li>
+            <li><a href="#">Sostenibilidad</a></li>
+            <li><a href="#">Blog</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Contacto</h4>
+          <ul>
+            <li><a href="#">hola@obsidian.coffee</a></li>
+            <li><a href="#">Instagram</a></li>
+            <li><a href="#">WhatsApp</a></li>
+            <li><a href="#">Distribuidores</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 Obsidian Coffee. Todos los derechos reservados.</span>
+        <span>Tostado con obsesión — Entregado con precisión.</span>
+      </div>
+    </footer>
+
+  </div><!-- /content-layer -->
+
+  <script>
+    // ── Elementos ─────────────────────────────────────────────────
+    const nav         = document.getElementById('main-nav');
+    const video       = document.getElementById('bgVideo');
+    const heroDriver  = document.querySelector('.hero-driver');
+    const heroInner   = document.querySelector('.hero-inner');
+    const heroScene   = document.getElementById('heroScene');
+    const heroSection = document.querySelector('.hero');
+    const barFill     = document.getElementById('scrollBarFill');
+    const slotA       = document.getElementById('slotA');
+    const slotB       = document.getElementById('slotB');
+    const scrollHint  = document.getElementById('scrollHint');
+    const overlay     = document.querySelector('.video-overlay');
+
+    // ── Estado ────────────────────────────────────────────────────
+    let targetProgress = 0;
+    let smoothProgress = 0;
+
+    // LERP: cuánto se acerca cada frame (0.07 = fluido, 0.13 = más responsivo)
+    const LERP = 0.075;
+
+    // Mínima diferencia de tiempo para hacer seek (evita seeks innecesarios)
+    // Un video a 30fps tiene frames cada ~0.033s; usamos la mitad como threshold.
+    const SEEK_THRESHOLD = 0.016;
+
+    // Duración cacheada para no leerla del DOM cada frame
+    let videoDuration = 0;
+
+    // Etapas narrativas
+    const stages = [
+      { at: 0,    text: '' },
+      { at: 0.05, text: 'Los granos toman forma…' },
+      { at: 0.35, text: 'La presión se acumula…' },
+      { at: 0.65, text: 'La explosión.' },
+      { at: 0.85, text: 'El aroma lo inunda todo.' },
+    ];
+    let activeSlot = 'A';
+    let lastText   = '';
+
+    // ── Caché del overlay para evitar rebuilds innecesarios ───────
+    let lastOverlayXP = -1;
+
+    // ── Scroll: solo escribe el target, nada más ──────────────────
+    window.addEventListener('scroll', () => {
+      const driverH  = heroDriver.offsetHeight - window.innerHeight;
+      targetProgress = Math.min(Math.max(window.scrollY / driverH, 0), 1);
+      nav.classList.toggle('scrolled', window.scrollY > 60);
+    }, { passive: true });
+
+    // ── rAF loop ──────────────────────────────────────────────────
+    function rafLoop() {
+      const diff = targetProgress - smoothProgress;
+
+      // Snap cuando ya está muy cerca: elimina el "eternamente moviéndose"
+      if (Math.abs(diff) < 0.0003) {
+        smoothProgress = targetProgress;
+      } else {
+        smoothProgress += diff * LERP;
+      }
+
+      const p = smoothProgress;
+
+      // 1. Video seek — solo si el delta vale al menos medio frame
+      if (videoDuration > 0) {
+        const wantedTime = p * videoDuration;
+        if (Math.abs(wantedTime - video.currentTime) > SEEK_THRESHOLD) {
+          // fastSeek() es más rápido en navegadores que lo soportan
+          if (video.fastSeek) {
+            video.fastSeek(wantedTime);
+          } else {
+            video.currentTime = wantedTime;
+          }
+        }
+      }
+
+      // 2. Barra de progreso
+      barFill.style.height = (p * 100).toFixed(1) + '%';
+
+      // 3. Hero text fade (primer 28% del scroll)
+      const textFade = p < 0.28 ? p / 0.28 : 1;
+      if (textFade < 1 || heroInner.style.opacity !== '0') {
+        heroInner.style.opacity   = (1 - textFade).toFixed(3);
+        heroInner.style.transform = `translateY(${(textFade * -70).toFixed(1)}px)`;
+      }
+
+      // 4. Scroll hint
+      scrollHint.style.opacity = p < 0.03 ? '1' : '0';
+
+      // 5. Overlay dinámico — solo recalcula cuando xp cambió en >0.5%
+      const xp = p > 0.48 ? (p - 0.48) / 0.52 : 0;
+      if (Math.abs(xp - lastOverlayXP) > 0.005) {
+        lastOverlayXP = xp;
+        const mid = (0.12 + xp * 0.30).toFixed(2);
+        const top = (0.50 + xp * 0.12).toFixed(2);
+        overlay.style.background =
+          `linear-gradient(180deg,rgba(6,3,1,${top}) 0%,rgba(6,3,1,${mid}) 45%,rgba(6,3,1,${(0.22+xp*0.22).toFixed(2)}) 65%,rgba(6,3,1,0.82) 100%)`;
+      }
+
+      // 6. Frases cinemáticas — crossfade entre slotA / slotB
+      const showStage = textFade >= 0.95;
+      let stage = stages[0];
+      for (const s of stages) { if (targetProgress >= s.at) stage = s; }
+      const newText = showStage ? stage.text : '';
+
+      if (newText !== lastText) {
+        lastText = newText;
+        const incoming = activeSlot === 'A' ? slotA : slotB;
+        const outgoing  = activeSlot === 'A' ? slotB : slotA;
+        incoming.textContent = newText;
+        // Doble rAF para garantizar que el texto ya esté en el DOM antes del fade
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          outgoing.classList.remove('visible');
+          if (newText) incoming.classList.add('visible');
+          else         incoming.classList.remove('visible');
+        }));
+        activeSlot = activeSlot === 'A' ? 'B' : 'A';
+      }
+
+      requestAnimationFrame(rafLoop);
+    }
+
+    // ── Arranca cuando el video tiene metadata ────────────────────
+    video.addEventListener('loadedmetadata', () => {
+      videoDuration = video.duration;
+      // Congela el video en el primer frame para que el poster no parpadee
+      video.currentTime = 0;
+      video.pause();
+    });
+    video.load();
+    requestAnimationFrame(rafLoop);
+
+    // ── Hero 3D tilt (solo al inicio) ─────────────────────────────
+    heroSection.addEventListener('mousemove', e => {
+      if (targetProgress > 0.08) return;
+      const r = heroSection.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width  - 0.5;
+      const y = (e.clientY - r.top)  / r.height - 0.5;
+      heroScene.style.transform = `rotateY(${x * 10}deg) rotateX(${-y * 6}deg)`;
+    });
+    heroSection.addEventListener('mouseleave', () => {
+      heroScene.style.transform = 'rotateY(0deg) rotateX(0deg)';
+    });
+
+    // ── Reveal sections ───────────────────────────────────────────
+    const revealObs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('visible'); revealObs.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+    // ── Count-up stats ────────────────────────────────────────────
+    const countObs = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const el     = entry.target;
+        const target = parseInt(el.dataset.target, 10);
+        const suffix = el.querySelector('sup')?.textContent || '';
+        let current  = 0;
+        const step   = target / (1800 / 16);
+        const tick   = () => {
+          current = Math.min(current + step, target);
+          el.innerHTML = Math.floor(current) + `<sup>${suffix}</sup>`;
+          if (current < target) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        countObs.unobserve(el);
+      });
+    }, { threshold: 0.5 });
+    document.querySelectorAll('.stat-num[data-target]').forEach(el => countObs.observe(el));
+
+    // ── Form submit ───────────────────────────────────────────────
+    function handleSubmit(e) {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      btn.textContent = '✓ ¡Listo! Te avisamos.';
+      btn.style.cssText += ';background:rgba(200,120,26,0.3);color:var(--cream);border:1px solid var(--amber)';
+      btn.disabled = true;
+    }
+  </script>
+
+</body>
+</html>

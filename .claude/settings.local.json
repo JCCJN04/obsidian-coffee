@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ffprobe -v error -select_streams v:0 -show_entries stream=width,height,duration,r_frame_rate,nb_frames -of csv=p=0 cafe_beans_explosion.mp4)",
+      "Bash(npx create-next-app@latest cafe-lumina --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --yes)",
+      "Bash(mkdir -p cafe-lumina/public/frames)",
+      "Bash(ffmpeg -i cafe_beans_explosion.mp4 -vf \"fps=24,scale=800:-1\" -c:v libwebp -quality 85 \"cafe-lumina/public/frames/frame_%04d.webp\")",
+      "Bash(cp \"C:\\\\Users\\\\mendo\\\\Downloads\\\\code\\\\chamba\\\\web\\\\cafeteria\\\\first_frame.jpeg\" \"C:\\\\Users\\\\mendo\\\\Downloads\\\\code\\\\chamba\\\\web\\\\cafeteria\\\\cafe-lumina\\\\public\\\\first_frame.jpeg\")",
+      "Bash(cp \"C:\\\\Users\\\\mendo\\\\Downloads\\\\code\\\\chamba\\\\web\\\\cafeteria\\\\last_frame.jpeg\" \"C:\\\\Users\\\\mendo\\\\Downloads\\\\code\\\\chamba\\\\web\\\\cafeteria\\\\cafe-lumina\\\\public\\\\last_frame.jpeg\")",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(node:*)"
+    ]
+  }
+}
