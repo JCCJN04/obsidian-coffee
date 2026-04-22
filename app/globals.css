@@ -24,6 +24,7 @@ body {
   font-weight: 300;
   overflow-x: hidden;
   position: relative;
+  scrollbar-gutter: stable;
 }
 
 /* ───────────────────────── CANVAS LAYER ───────────────────────── */

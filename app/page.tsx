@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const FRAME_COUNT = 121
-const IMAGE_SCALE = 0.88
+const IMAGE_SCALE = 1.0
 
 const STAGES = [
   { at: 0,    text: '' },
@@ -46,6 +46,8 @@ export default function Home() {
 
     const cvs = canvas  // non-null alias for closures
     const ctx = cvs.getContext('2d')!
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
     const frames: HTMLImageElement[] = new Array(FRAME_COUNT).fill(null)
     let currentFrame    = -1
     let firstFrameReady = false
@@ -54,6 +56,8 @@ export default function Home() {
       const dpr = window.devicePixelRatio || 1
       cvs.width  = window.innerWidth  * dpr
       cvs.height = window.innerHeight * dpr
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
       if (currentFrame >= 0) drawFrame(currentFrame)
     }
 
@@ -85,7 +89,13 @@ export default function Home() {
       first.src = '/frames/frame_0001.webp'
     }
 
-    window.addEventListener('resize', resizeCanvas, { passive: true })
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
+    const handleResize = () => {
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(resizeCanvas, 300)
+    }
+
+    window.addEventListener('resize', handleResize, { passive: true })
     resizeCanvas()
     loadFrames()
 
@@ -222,7 +232,8 @@ export default function Home() {
 
     return () => {
       window.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('resize', resizeCanvas)
+      window.removeEventListener('resize', handleResize)
+      if (resizeTimer) clearTimeout(resizeTimer)
       heroSection.removeEventListener('mousemove', handleMouseMove)
       heroSection.removeEventListener('mouseleave', handleMouseLeave)
       cancelAnimationFrame(rafId)
